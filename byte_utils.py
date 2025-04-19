@@ -38,6 +38,13 @@ def format_hex(data, sep=' ', prefix='', case='upper'):
     fmt = f"{{:{prefix}02{'X' if case == 'upper' else 'x'}}}"
     return sep.join(fmt.format(b) for b in data)
 
+class BytesReaderError(Exception):
+    def __init__(self, message):
+        self.message = message
+    
+    def __str__(self):
+        return self.message
+
 class BytesReader:
     def __init__(self, data: bytes, i: int = 0):
         self.data = data
@@ -54,7 +61,7 @@ class BytesReader:
         
         for j in range(6):
             if j >= 5:#i在0~4共5个索引内，一共能读出5*7=35个bits，刚好大于32，如果再多则varint出错，抛出异常
-                raise IOError("Insufficient data for varint")
+                raise BytesReaderError("Insufficient data for varint")
             
             byte_in = self.data[self.i]
             self.i += 1
@@ -68,23 +75,40 @@ class BytesReader:
         length = self.read_varint()
         
         if self.i + length > len(self.data):
-            raise IOError("Insufficient data for string")
+            raise BytesReaderError("Insufficient data for string")
         
         old_i = self.i
         self.i += length
         return self.data[old_i:self.i].decode('utf-8')
     
+    def read_bytes(self, size):
+        if self.i + size > len(self.data):
+            raise BytesReaderError(f"Insufficient data for [{size}]bytes")
+        
+        old_i = self.i
+        self.i += size
+        return self.data[old_i:self.i]
+        
+    
     def read_byte(self):
-        if self.i >= len(self.data):
-            raise IOError("Insufficient data for byte")
+        if self.i + 1 > len(self.data):
+            raise BytesReaderError("Insufficient data for byte")
         
         old_i = self.i
         self.i += 1
         return self.data[old_i]
     
+    def read_int(self):
+        if self.i + 4 > len(self.data):
+            raise BytesReaderError("Insufficient data for int")
+        
+        old_i = self.i
+        self.i += 4
+        return struct.unpack(">i", self.data[old_i:self.i])[0]
+    
     def read_ushort(self):
         if self.i + 2 > len(self.data):
-            raise IOError("Insufficient data for ushort")
+            raise BytesReaderError("Insufficient data for ushort")
         
         old_i = self.i
         self.i += 2
@@ -93,7 +117,7 @@ class BytesReader:
     
     def read_long(self):
         if self.i + 8 > len(self.data):
-            raise IOError("Insufficient data for long")
+            raise BytesReaderError("Insufficient data for long")
         
         old_i = self.i
         self.i += 8
@@ -102,12 +126,17 @@ class BytesReader:
     def read_uuid(self):
         #编码为无符号的 128 位整数uuid，16bytes
         if self.i + 16 > len(self.data):
-            raise IOError("Insufficient data for uuid")
+            raise BytesReaderError("Insufficient data for uuid")
         
         old_i = self.i
         self.i += 16
         return uuid.UUID(bytes=self.data[old_i:self.i])
-
+    
+    def unread(self,length):
+        if length > self.i:
+            raise BytesReaderError("Unread length out of range")
+        self.i -= length
+        return self.i
 
 def write_varint(byte, value):
     while True:
@@ -118,15 +147,19 @@ def write_varint(byte, value):
         byte.append(part)
         if value == 0:
             break
+            
+def write_ushort(byte, value):
+    byte.append((value>>8)&0xff)
+    byte.append(value&0xff)
 
 def write_utf(byte, value):
     write_varint(byte, len(value))
     byte.extend(value.encode('utf-8'))
 
-def write_str_response(client_socket, pack_id, response):
-    # 写入包头：pack_id
+def write_str_response(client_socket, packet_id, response):
+    # 写入包头：packet_id
     response_array = bytearray()
-    write_varint(response_array, pack_id)
+    write_varint(response_array, packet_id)
     #写入字符串
     write_utf(response_array, response)
     #写入长度

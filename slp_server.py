@@ -27,8 +27,25 @@ class SlpServer:
     def __init__(self,config):
         self.config = config
         self.motd = self.create_motd(config)
+        self.motd1_6 = self.create_motd116(config)
         self.is_loop = False
         logger.info("SLP服务器初始化完成")
+    
+    @staticmethod
+    def create_motd116(config):
+        send_bytes = bytes((
+            "§1\0" +
+            str(config["protocol"]) + "\0" +
+            "Too old!\0" +
+            "The client is too old. Please use client 1.7+\0" +#因为1.6只支持英文，只能这么做
+            str(len(config["samples"])) + "\0" +
+            str(len(config["samples"])) + "\0"
+        ).encode('utf-16-be'))
+        send_head = bytearray()
+        send_head.append(0xff)  # 插入packet id
+        write_ushort(send_head, len(send_bytes) // 2)  # 字符长度
+        
+        return send_head + send_bytes
 
     @staticmethod
     def create_motd(config):
@@ -112,11 +129,6 @@ class SlpServer:
 
         logger.info("SLP服务器已退出")
 
-    # https://minecraft.wiki/w/Java_Edition_protocol#Handshaking
-    # https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Server_List_Ping#1.6
-    # https://minecraft.wiki/w/Java_Edition_protocol#Login_Start
-    # https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Server_List_Ping#Current_(1.7+)
-    # https://minecraft.wiki/w/Java_Edition_protocol#Pong_Response_(status)
 
     '''
         流程：
@@ -124,7 +136,6 @@ class SlpServer:
         然后在任何其他请求之前，发送binding包绑定	
         服务器再进行回复
     '''
-
     def handle_socket(self,client_socket):
         try:
             status = REQUEST.HANDSHAKING
@@ -186,19 +197,19 @@ class SlpServer:
                     else:
                         logger.warning("识别为未知数据")
                         return
+                except BytesReaderError as e:
+                    logger.warning(f"收到了无效数据（{e}）")
                 except TypeError as e:
-                    logger.warning("收到了无效数据（类型错误）")
-                    logger.warning(f'error file:\"{e.__traceback__.tb_frame.f_globals["__file__"]}\" line:{e.__traceback__.tb_lineno}')
+                    logger.warning(f"收到了无效数据[{e}]")
                     return
                 except IndexError as e:
-                    logger.warning("收到了无效数据（索引溢出）")
-                    logger.warning(f'error file:\"{e.__traceback__.tb_frame.f_globals["__file__"]}\" line:{e.__traceback__.tb_lineno}')
+                    logger.warning(f"收到了无效数据[{e}]")
                     return
                 except ConnectionError:
                     logger.warning("客户端提前断开连接")
                     return
                 except socket.timeout:
-                    logger.debug("连接超时")#此处超时处理read_exactly
+                    logger.debug("客户端连接超时")#此处超时处理read_exactly
                     return
                 except Exception as e:
                     logger.error(f"发生其它错误: {traceback.format_exc()}")
@@ -211,6 +222,8 @@ class SlpServer:
         
 
 
+    # https://minecraft.wiki/w/Java_Edition_protocol#Handshaking
+    # https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Server_List_Ping#Current_(1.7+)
     @staticmethod
     def handle_handshaking(data):
         version = data.read_varint()
@@ -223,7 +236,7 @@ class SlpServer:
                      .replace("\n", "\\n"))
         port = data.read_ushort()
         state = data.read_byte()
-        logger.info(f"数据解析：version:[{version}], ip:[{server_ip}], port:[{port}], state:[{hex(state)}]")
+        logger.info(f"数据解析：version:[{version}], server_ip:[{server_ip}], port:[{port}], state:[{hex(state)}]")
         if state == 0x01:  # Status
             logger.info("下一个为状态请求")
             return REQUEST.STATUS
@@ -237,31 +250,91 @@ class SlpServer:
             logger.info("下一个为未知请求")
             return REQUEST.UNKNOWN
 
-    #返回值代表是否处理完成
-    @staticmethod
-    def handle_head(head,client_socket,status):
+    # https://minecraft.wiki/w/Minecraft_Wiki:Projects/wiki.vg_merge/Server_List_Ping#1.6
+    def handle_head(self,head,client_socket,status):
         next2 = read_exactly(client_socket, 2, timeout=5)
         logger.info(f"收到数据：[2]>[{format_hex(next2)}]")
         if next2[0] != 0x01 or next2[1] != 0xFA:# 确认后两个是 01和fa
             logger.warning("收到了意外的数据包")
+            return
         else:
             logger.info("识别为1.6-ping")
-            logger.info("发送空响应")
-            # 以踢出数据包响应客户端，长度直接设为0，不给出任何信息
-            client_socket.sendall(bytes([0xFF, 0x00, 0x00]))
+            length = read_exactly(client_socket, 2, timeout=5)
+            logger.info(f"收到数据：[2]>[{format_hex(length)}]")
+            length = BytesReader(length).read_ushort()
+            if length != 11:#0x00 0x0B
+                logger.warning("收到了意外的数据包")
+                return
+            #转换为长度读取下一个字符串
+            logger.info(f"下个数据长度：[{length * 2}]")
+            mc_ping_host = read_exactly(client_socket, length*2 ,timeout=5)
+            logger.info(f"收到数据：[{length*2}]>[{format_hex(mc_ping_host)}]")
+            #转换编码到utf8并验证
+            mc_ping_host = mc_ping_host.decode('utf-16-be').encode('utf-8').decode()
+            if mc_ping_host != "MC|PingHost":
+                logger.warning("收到了意外的数据包")
+                return
+            #接收下一个短整型
+            logger.info(f"下个数据长度：[2]")
+            length = read_exactly(client_socket, 2, timeout=5)
+            logger.info(f"收到数据：[2]>[{format_hex(length)}]")
+            length = BytesReader(length).read_ushort()
+            #接收剩余数据
+            logger.info(f"剩余数据长度：[{length}]")
+            data = read_exactly(client_socket, length, timeout=5)
+            logger.info(f"收到数据：[{length}]>[{format_hex(data)}]")
+            data = BytesReader(data)
+            #解析
+            protocol_version = data.read_byte()#1
+            u16str_length = data.read_ushort()#2
+            u16str_size = length - 7#前面一共3，后面端口号4，合起来是7
+            if u16str_length*2 != u16str_size:
+                logger.warning("收到了意外的数据包")
+                return
+            #读取主机名
+            server_ip = data.read_bytes(u16str_size).decode('utf-16-be').encode('utf-8').decode()
+            #读取端口号
+            port = data.read_int()#4
+            
+            logger.info(f"数据解析：mc_ping_host[{mc_ping_host}], protocol_version[{protocol_version}], server_ip[{server_ip}], port[{port}]")
+            
+            logger.info("发送1.16-ping响应")
+            # 以踢出数据包响应客户端，告知用户客户端太旧，使用新版本
+            client_socket.sendall(self.motd1_6)
 
+    #https://minecraft.wiki/w/Java_Edition_protocol#Clientbound
+    #https://minecraft.wiki/w/Java_Edition_protocol#Clientbound_2
     def handle_binding(self,client_socket,status):
         logger.info("发送motd")
         write_str_response(client_socket, 0x00, self.motd)  # 发送motd
-
+    
+    # https://minecraft.wiki/w/Java_Edition_protocol#Login_Start
+    #https://minecraft.wiki/w/Java_Edition_protocol#Disconnect_(login)
+    #发送玩家断开连接的原因，pkid 0x00
     def handle_login(self, client_socket,data,status):
         player_name = data.read_str()
-        rbyte = data.read_byte()
-        uuid = data.read_uuid()
-        logger.info(f"数据解析：player_name[{player_name}], rbyte[{rbyte}], uuid:[{uuid}]")
-        logger.info("发送kick message")
+        
+        #目前已知有3种情况，分别是：玩家名后什么也没有、玩家名后有profile_id为0且后无uuid、玩家名后有profile_id为1且后有uuid
+        try: #特殊处理：数据包可能不存在后面的UUID
+            buuid = False
+            profile_id = data.read_byte()
+            buuid = True
+            if profile_id == 0x01:
+                uuid = data.read_uuid()
+            else:#否则为0则没有
+                uuid = None
+        except BytesReaderError:
+            profile_id = None
+            uuid = None
+            #可能不存在profile_id，回退1字节读取并判断剩余大小是否足够
+            if buuid and (data.len() - data.unread(1)) >= 16:#可以读取uuid且不会抛出异常
+                uuid = data.read_uuid()
+                
+        logger.info(f"数据解析：player_name[{player_name}], profile_id[{profile_id}], uuid:[{uuid}]")
+        logger.info("发送kick_message")#实际上是disconnect，但是为了更直观和保持配置文件不变，索性就叫踢出消息
         write_str_response(client_socket, 0x00, json.dumps({"text": self.config["kick_message"]}))
-
+    
+    # https://minecraft.wiki/w/Java_Edition_protocol#Pong_Response_(status)
     @staticmethod
     def handle_ping(client_socket,data):
         response = bytearray()
