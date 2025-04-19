@@ -46,10 +46,13 @@ class ServerLogger:
     
     def _init_logger(self):
         """初始化日志系统"""
+        # 确保logs目录存在
+        os.makedirs('logs', exist_ok=True)
+        
         # 初始化日志文件
         base_date = datetime.date.today().strftime("%Y-%m-%d")
         max_index = self._find_max_index(base_date)
-        filename = f"{base_date}-{max_index + 1}.log"  # 改为实例属性
+        filename = os.path.join('logs', f"{base_date}-{max_index + 1}.log")
         self.log_file = open(filename, "a", buffering=1, encoding="utf-8")
         
         # 初始化队列和后台线程
@@ -89,12 +92,17 @@ class ServerLogger:
         """查找当前日期的最大文件索引"""
         pattern = re.compile(r"^(\d{4}-\d{2}-\d{2})-(\d+)\.log$")
         max_index = 0
-        for filename in os.listdir():
-            match = pattern.match(filename)
-            if match:
-                file_date, index_str = match.groups()
-                if file_date == base_date:
-                    max_index = max(max_index, int(index_str))
+        
+        try:
+            for filename in os.listdir('logs'):
+                match = pattern.match(filename)
+                if match:
+                    file_date, index_str = match.groups()
+                    if file_date == base_date:
+                        max_index = max(max_index, int(index_str))
+        except FileNotFoundError:
+            pass  # 如果logs目录不存在，直接返回0
+            
         return max_index
     
     def _process_logs(self):

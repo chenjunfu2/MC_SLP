@@ -61,12 +61,15 @@ class SlpServer:
         self.is_loop = True
         logger.info("SLP服务器启动中")
 
-        thread = threading.Thread(target=self.loop, args=(max_threads,), name=name)
-        thread.start()
+
         if wait:
-            thread.join()
-            thread = None
-        return thread
+            self.loop(max_threads)
+            return
+        else:
+            thread = threading.Thread(target=self.loop, args=(max_threads,), name=name)
+            thread.start()
+            return thread
+        
 
     def stop(self):
         if not self.is_loop:
@@ -107,9 +110,8 @@ class SlpServer:
             finally:
                 server_socket.close()
                 server_socket = None
+                self.is_loop = False#强制设置为False
 
-        #强制设置为False
-        self.is_loop = False
         logger.info("SLP服务器已退出")
 
     # https://minecraft.wiki/w/Java_Edition_protocol#Handshaking
