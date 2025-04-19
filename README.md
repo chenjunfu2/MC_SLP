@@ -13,5 +13,7 @@
 服务器启动会自动在"./logs/"下生成日志
 
 使用：
-- 直接下载源码，在目录下运行main.py即可
-- Windows用户可以双击start.bat启动
+1. 先下载源码
+2. 在源码文件夹内，使用pip install -r requirements.txt安装依赖
+3. 然后在当前文件夹下打开终端，使用命令python main.py运行即可
+    - Windows用户可以双击start.bat启动
