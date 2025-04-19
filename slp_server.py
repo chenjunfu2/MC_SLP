@@ -319,10 +319,12 @@ class SlpServer:
             buuid = False
             profile_id = data.read_byte()
             buuid = True
-            if profile_id == 0x01:
+            if profile_id == 0x01:#为1则有
                 uuid = data.read_uuid()
-            else:#否则为0则没有
+            elif profile_id == 0x00:#否则为0则没有
                 uuid = None
+            else:#其它值：说明后面跟着的就是uuid，抛异常撤回读取
+                raise BytesReaderError("unread 1")
         except BytesReaderError:
             profile_id = None
             uuid = None
