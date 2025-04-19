@@ -1,5 +1,5 @@
 # MC_SLP
-用于在停服维护过程对客户端提供SLP服务通知玩家服务器正在维护的微型服务器，全称：Minecrft Server List Ping
+用于在停服维护过程对客户端提供SLP服务通知玩家服务器正在维护的微型服务器，全称：Minecraft Server List Ping
 
 可以在配置文件内设置：
 - 需要绑定的ip
