@@ -1,5 +1,4 @@
 import traceback
-import signal
 
 from server_logger import ServerLogger
 from config import Config
