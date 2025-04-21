@@ -17,3 +17,6 @@
 2. 在源码文件夹内，使用pip install -r requirements.txt安装依赖
 3. 然后在当前文件夹下打开终端，使用命令python main.py运行即可
     - Windows用户可以双击start.bat启动
+
+## TODO
+修复1.21+高版本server list界面无法显示版本名称，而是一直显示尝试连接的bug
