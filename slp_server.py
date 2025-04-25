@@ -340,11 +340,12 @@ class SlpServer:
     # https://minecraft.wiki/w/Java_Edition_protocol#Pong_Response_(status)
     @staticmethod
     def handle_ping(client_socket,data):
+        long_data = data.read_long()
+        logger.info(f"数据解析：long_data[{long_data}]")
         response = bytearray()
-        pong_data = data.read_long()
         write_varint(response, 9)#长度9
         write_varint(response, 0x01)#packet_id
-        write_long(response, pong_data)#pong数据（从ping中读取）
+        write_long(response, long_data)#pong数据（从ping中读取）
         logger.info("发送pong响应")
-        client_socket.sendall(response)#返回pong包
+        client_socket.sendall(response)#发送pong包
 
