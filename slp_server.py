@@ -341,9 +341,10 @@ class SlpServer:
     @staticmethod
     def handle_ping(client_socket,data):
         response = bytearray()
+        pong_data = data.read_long()
         write_varint(response, 9)#长度9
         write_varint(response, 0x01)#packet_id
-        response.append(data.read_long())
+        write_long(response, pong_data)#pong数据（从ping中读取）
         logger.info("发送pong响应")
         client_socket.sendall(response)#返回pong包
 

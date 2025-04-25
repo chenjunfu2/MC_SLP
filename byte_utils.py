@@ -148,14 +148,16 @@ def write_varint(byte, value):
         if value == 0:
             break
             
-def write_byte(byte, value):
-    byte.append(value&0xff)
+def write_byte(byte:bytearray, value):
+    byte.append(value & 0xff)
             
-def write_ushort(byte, value):
-    byte.append((value>>8)&0xff)
-    byte.append(value&0xff)
+def write_ushort(byte:bytearray, value):
+    byte += struct.pack(">H", value)
+    
+def write_long(byte:bytearray, value):
+    byte += struct.pack(">q",value)
 
-def write_utf(byte, value):
+def write_utf(byte:bytearray, value):
     write_varint(byte, len(value))
     byte.extend(value.encode('utf-8'))
 
