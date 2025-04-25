@@ -27,12 +27,12 @@ class SlpServer:
     def __init__(self,config):
         self.config = config
         self.motd = self.create_motd(config)
-        self.motd1_6 = self.create_motd116(config)
+        self.motd16 = self.create_motd16(config)
         self.is_loop = False
         logger.info("SLP服务器初始化完成")
     
     @staticmethod
-    def create_motd116(config):
+    def create_motd16(config):
         send_bytes = bytes((
             "§1\0" +
             str(config["protocol"]) + "\0" +
@@ -303,7 +303,7 @@ class SlpServer:
             
             logger.info("发送1.16-ping响应")
             # 以踢出数据包响应客户端，告知用户客户端太旧，使用新版本
-            client_socket.sendall(self.motd1_6)
+            client_socket.sendall(self.motd16)
 
     #https://minecraft.wiki/w/Java_Edition_protocol#Clientbound
     #https://minecraft.wiki/w/Java_Edition_protocol#Clientbound_2
