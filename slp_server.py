@@ -111,7 +111,7 @@ class SlpServer:
         if server_socket is not None:
             try:
                 executor = ThreadPoolExecutor(max_workers=max_threads)
-                server_socket.listen(5)  # 允许5个挂起的链接
+                server_socket.listen(max_threads)  # 允许max_threads个挂起的链接（与线程数相同）
                 logger.info(f"SLP服务器启动成功，在[{self.config["ip"]}:{self.config["port"]}]监听")
                 while self.is_loop:
                     client_socket, client_address = server_socket.accept()
@@ -182,6 +182,7 @@ class SlpServer:
                             logger.info("识别为binding")
                             if length == 1:#长度为1：0x01 0x00 为binding包
                                 self.handle_binding(client_socket,status)
+                                continue#客户端在binding后有可能还会进行一次ping和pong测试延迟，需要重试等待客户端，而不是立刻断开连接
                             else:
                                 logger.warn("binding长度错误")
                             return
@@ -193,7 +194,7 @@ class SlpServer:
                     elif packet_id == 0x01:
                         logger.info("识别为ping")
                         self.handle_ping(client_socket, data)
-                        return
+                        return#客户端ping后返回pong并立刻断开链接即可完成处理
                     else:
                         logger.warning("识别为未知数据")
                         return

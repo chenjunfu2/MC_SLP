@@ -148,6 +148,9 @@ def write_varint(byte, value):
         if value == 0:
             break
             
+def write_byte(byte, value):
+    byte.append(value&0xff)
+            
 def write_ushort(byte, value):
     byte.append((value>>8)&0xff)
     byte.append(value&0xff)
@@ -159,7 +162,7 @@ def write_utf(byte, value):
 def write_str_response(client_socket, packet_id, response):
     # 写入包头：packet_id
     response_array = bytearray()
-    write_varint(response_array, packet_id)
+    write_byte(response_array, packet_id)
     #写入字符串
     write_utf(response_array, response)
     #写入长度
