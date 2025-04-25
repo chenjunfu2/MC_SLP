@@ -182,6 +182,7 @@ class SlpServer:
                             logger.info("识别为binding")
                             if length == 1:#长度为1：0x01 0x00 为binding包
                                 self.handle_binding(client_socket,status)
+                                status = REQUEST.UNKNOWN #切换状态到unknown，防止被利用，导致无限循环发包
                                 continue#客户端在binding后有可能还会进行一次ping和pong测试延迟，需要重试等待客户端，而不是立刻断开连接
                             else:
                                 logger.warn("binding长度错误")
@@ -190,6 +191,7 @@ class SlpServer:
                             logger.warn("识别为unknown")
                             return
                         else:
+                            logger.warn("数据错误，出现意外的的status值")
                             return
                     elif packet_id == 0x01:
                         logger.info("识别为ping")
