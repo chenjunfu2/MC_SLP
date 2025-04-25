@@ -152,8 +152,8 @@ class SlpServer:
     
                     logger.info("识别为length，继续接收")
                     #为varint长度
-                    length = head
-                    if (length & 0x80) == 0x80:
+                    length = (head & 0x7F)#假装读取了第一个byte
+                    if (head & 0x80) == 0x80:
                         for j in range(1,6):
                             if j >= 5:
                                 raise IOError("Insufficient data for varint")
