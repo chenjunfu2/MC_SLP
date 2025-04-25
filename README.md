@@ -19,4 +19,4 @@
     - Windows用户可以双击start.bat启动
 
 ## TODO
-修复1.21+高版本server list界面无法显示版本名称，而是一直显示尝试连接的bug
+None
