@@ -301,7 +301,7 @@ class SlpServer:
             
             logger.info(f"数据解析：mc_ping_host[{mc_ping_host}], protocol_version[{protocol_version}], server_ip[{server_ip}], port[{port}]")
             
-            logger.info("发送1.16-ping响应")
+            logger.info("发送1.6-ping响应")
             # 以踢出数据包响应客户端，告知用户客户端太旧，使用新版本
             client_socket.sendall(self.motd16)
 
