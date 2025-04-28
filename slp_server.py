@@ -212,7 +212,7 @@ class SlpServer:
                     logger.warning("客户端提前断开连接")
                     return
                 except socket.timeout:
-                    logger.debug("客户端连接超时")#此处超时处理read_exactly
+                    logger.warning("客户端连接超时")#此处超时处理read_exactly
                     return
                 except Exception as e:
                     logger.error(f"发生其它错误: {traceback.format_exc()}")
