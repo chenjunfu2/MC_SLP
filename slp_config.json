@@ -1,0 +1,13 @@
+{
+    "ip": "0.0.0.0",
+    "kick_message": "§4§l很抱歉，服务器正在维护中，暂时无法进入！\n\n§e请不要心急，耐心等待服主通知",
+    "motd": "§c服务器正在维护！\n§e请等待服主通知",
+    "port": 25565,
+    "protocol": 2,
+    "samples": [
+        "§f服务器正在维护",
+        "§f请等待服主通知"
+    ],
+    "server_icon": "server-icon.png",
+    "version_text": "§4服务器维护中..."
+}

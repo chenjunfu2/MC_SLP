@@ -6,6 +6,7 @@ import re
 import time
 import queue
 import atexit
+
 from enum import IntEnum
 from collections import namedtuple
 from colorama import init
@@ -24,15 +25,15 @@ class LogLevel(IntEnum):
 class ServerLogger:
     _instance = None
     _lock = threading.Lock()
-    _console_lock = threading.Lock()  # 控制台输出锁
+    _console_lock = threading.Lock() # 消息同步锁，保证原子性
     
     # 定义日志配置结构
     LogConfig = namedtuple('LogConfig', ['color', 'name'], defaults=('\033[0m', 'UNKNOWN'))
     LOG_CONFIGS = (
-        LogConfig("\033[97m", "INFO"),  # 白色
-        LogConfig("\033[93m", "WARNING"),  # 黄色
-        LogConfig("\033[91m", "ERROR"),  # 红色
-        LogConfig("\033[94m", "DEBUG")  # 蓝色
+        LogConfig("\033[37m", "INFO"),  # 灰色
+        LogConfig("\033[33m", "WARNING"),  # 黄色
+        LogConfig("\033[31m", "ERROR"),  # 红色
+        LogConfig("\033[34m", "DEBUG")  # 蓝色
     )
     
     def __new__(cls):
@@ -151,9 +152,9 @@ class ServerLogger:
             print(f"日志写入失败：{str(e)}")
     
     def _log(self, level: LogLevel, message: str):
-        """日志入队方法"""
         if not self._running:  # 防止停止过程插入消息
             return
+        #同步锁
         with self._console_lock:
             timestamp = datetime.datetime.now()
             thread = threading.current_thread()
@@ -167,7 +168,7 @@ class ServerLogger:
             #插入到写入队列
             self._log_queue.put(log_line)
     
-    # 日志级别方法（保持不变）
+    # 日志级别方法
     def info(self, message: str):
         self._log(LogLevel.INFO, message)
     
@@ -181,16 +182,33 @@ class ServerLogger:
         self._log(LogLevel.DEBUG, message)
 
 
-# 示例用法（测试关闭流程）
+# 示例用法
 if __name__ == "__main__":
-    logger = ServerLogger()
+    #先测试不同颜色输出
+    print("颜色测试")
     
+    
+    # 定义所有字体颜色的ANSI转义码（30-37, 90-97）
+    colors = [
+        '\033[30m', '\033[31m', '\033[32m', '\033[33m', '\033[34m', '\033[35m', '\033[36m', '\033[37m',
+        '\033[90m', '\033[91m', '\033[92m', '\033[93m', '\033[94m', '\033[95m', '\033[96m', '\033[97m'
+    ]
+    
+    # 生成带颜色的"Test"字符串（每个颜色后自动重置）
+    color_tests = [f"{color}Test\033[0m" for color in colors]
+    
+    # 每8个为一组输出
+    for i in range(0, len(color_tests), 8):
+        print(' '.join(color_tests[i:i + 8]))
+    
+    print("多线程测试")
+    
+    logger = ServerLogger()
     
     def worker(fun):
         for _ in range(5):
-            time.sleep(0.1)
+            time.sleep(0.01)
             fun("线程消息")
-    
     
     threads = [
         threading.Thread(target=worker, args=(logger.debug,), name="TaskExecutor0"),
@@ -205,7 +223,7 @@ if __name__ == "__main__":
     # 主线程日志
     for _ in range(5):
         logger.info("主线程消息")
-        time.sleep(0.1)
+        time.sleep(0.01)
     
     # 不等待线程直接退出（测试关闭逻辑）
     print("主线程执行完成，即将退出...")
