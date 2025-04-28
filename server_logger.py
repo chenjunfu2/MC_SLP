@@ -13,15 +13,18 @@ from colorama import init
 # 初始化colorama
 init()
 
+
 class LogLevel(IntEnum):
     INFO = 0
     WARNING = 1
     ERROR = 2
     DEBUG = 3
 
+
 class ServerLogger:
     _instance = None
     _lock = threading.Lock()
+    _console_lock = threading.Lock()  # 控制台输出锁
     
     # 定义日志配置结构
     LogConfig = namedtuple('LogConfig', ['color', 'name'], defaults=('\033[0m', 'UNKNOWN'))
@@ -38,7 +41,7 @@ class ServerLogger:
                 if cls._instance is None:
                     cls._instance = super().__new__(cls)
                     cls._instance._init_logger()
-                    atexit.register(cls._instance._safe_shutdown)# 注册退出处理函数
+                    atexit.register(cls._instance._safe_shutdown)  # 注册退出处理函数
         return cls._instance
     
     def __del__(self):
@@ -50,9 +53,9 @@ class ServerLogger:
         os.makedirs('logs', exist_ok=True)
         
         # 初始化日志文件
-        base_date = datetime.date.today().strftime("%Y-%m-%d")
-        max_index = self._find_max_index(base_date)
-        filename = os.path.join('logs', f"{base_date}-{max_index + 1}.log")
+        self.current_base_date = datetime.date.today().strftime("%Y-%m-%d")
+        max_index = self._find_max_index(self.current_base_date)
+        filename = os.path.join('logs', f"{self.current_base_date}-{max_index + 1}.log")
         self.log_file = open(filename, "a", buffering=1, encoding="utf-8")
         
         # 初始化队列和后台线程
@@ -61,7 +64,7 @@ class ServerLogger:
         self._worker_thread = threading.Thread(
             target=self._process_logs,
             name="LogWorker",
-            daemon=True#必须为true，防止死锁
+            daemon=True  # 必须为true，防止死锁
         )
         self._worker_thread.start()
     
@@ -70,20 +73,20 @@ class ServerLogger:
         if not hasattr(self, "_running") or not self._running:
             return
         
-        #设置标签防止继续插入
+        # 设置标签防止继续插入
         self._running = False
         
-        #发送终止信号通知工作线程退出
+        # 发送终止信号通知工作线程退出
         self._log_queue.put(None)
         
         # 等待队列处理完成
         self._log_queue.join()
 
-        #等待线程终止
+        # 等待线程终止
         if self._worker_thread.is_alive():
             self._worker_thread.join(timeout=10)  # 设置超时时间，超时直接忽略
         
-        #关闭文件
+        # 关闭文件
         if hasattr(self, "log_file"):
             self.log_file.close()
     
@@ -102,7 +105,7 @@ class ServerLogger:
                         max_index = max(max_index, int(index_str))
         except FileNotFoundError:
             pass  # 如果logs目录不存在，直接返回0
-            
+        
         return max_index
     
     def _process_logs(self):
@@ -114,21 +117,33 @@ class ServerLogger:
                 self._log_queue.task_done()
                 break
             
-            level, message, timestamp, thread_info = item
-            self._write_log(level, message, timestamp, thread_info)
+            self._write_log(item)
             self._log_queue.task_done()
     
-    def _write_log(self, level: LogLevel, message: str, timestamp: datetime.datetime, thread_info: str):
-        """写入和输出日志"""
+    def _rotate_log_file(self, new_date):
+        """切换日志文件到新日期"""
         try:
-            time_str = timestamp.strftime("%H:%M:%S")
-            config = self.LOG_CONFIGS[level]
-            log_line = f"[{time_str}] [{thread_info}/{config.name}]: {message}\n"
-            
-            # 控制台输出
-            sys.stdout.write(f"{config.color}{log_line}\033[0m")
-            
+            max_index = self._find_max_index(new_date)
+            filename = os.path.join('logs', f"{new_date}-{max_index + 1}.log")
+            tmp_log_file = open(filename, "a", buffering=1, encoding="utf-8")
+        except Exception as e:
+            sys.stderr.writer(f"日志文件切换失败: {str(e)}，新日期应为：[{new_date}]")
+            return#直接返回
+        #执行切换
+        if hasattr(self, 'log_file') and self.log_file:
+            self.log_file.close()
+        self.log_file = tmp_log_file
+        self.current_base_date = new_date
+    
+    def _write_log(self, item):
+        """写入和输出日志"""
+        # 检查是否需要切换日志文件
+        current_date = datetime.date.today().strftime("%Y-%m-%d")
+        if current_date != self.current_base_date:
+            self._rotate_log_file(current_date)
+        try:
             # 文件写入
+            log_line = item
             self.log_file.write(log_line)
             self.log_file.flush()
             os.fsync(self.log_file.fileno())
@@ -137,28 +152,46 @@ class ServerLogger:
     
     def _log(self, level: LogLevel, message: str):
         """日志入队方法"""
-        if not self._running:# 防止停止过程插入消息
-            return
-        
-        timestamp = datetime.datetime.now()
-        thread = threading.current_thread()
-        thread_info = thread.name if thread.name else f"Thread-{thread.ident}"
-        self._log_queue.put((level, message, timestamp, thread_info))
+        with self._console_lock:
+            timestamp = datetime.datetime.now()
+            thread = threading.current_thread()
+            thread_info = thread.name if thread.name else f"Thread-{thread.ident}"
+            time_str = timestamp.strftime("%H:%M:%S")
+            config = self.LOG_CONFIGS[level]
+            log_line = f"[{time_str}] [{thread_info}/{config.name}]: {message}\n"
+            
+            # 控制台输出
+            sys.stdout.write(f"{config.color}{log_line}\033[0m")
+            
+            if not self._running:  # 防止停止过程插入消息
+                return
+            #插入到写入队列
+            self._log_queue.put(log_line)
     
     # 日志级别方法（保持不变）
-    def info(self, message: str): self._log(LogLevel.INFO, message)
-    def warning(self, message: str): self._log(LogLevel.WARNING, message)
-    def error(self, message: str): self._log(LogLevel.ERROR, message)
-    def debug(self, message: str): self._log(LogLevel.DEBUG, message)
+    def info(self, message: str):
+        self._log(LogLevel.INFO, message)
+    
+    def warning(self, message: str):
+        self._log(LogLevel.WARNING, message)
+    
+    def error(self, message: str):
+        self._log(LogLevel.ERROR, message)
+    
+    def debug(self, message: str):
+        self._log(LogLevel.DEBUG, message)
+
 
 # 示例用法（测试关闭流程）
 if __name__ == "__main__":
     logger = ServerLogger()
     
+    
     def worker(fun):
         for _ in range(5):
             time.sleep(0.1)
             fun("线程消息")
+    
     
     threads = [
         threading.Thread(target=worker, args=(logger.debug,), name="TaskExecutor0"),
