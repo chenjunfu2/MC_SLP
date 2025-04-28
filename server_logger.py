@@ -152,6 +152,8 @@ class ServerLogger:
     
     def _log(self, level: LogLevel, message: str):
         """日志入队方法"""
+        if not self._running:  # 防止停止过程插入消息
+            return
         with self._console_lock:
             timestamp = datetime.datetime.now()
             thread = threading.current_thread()
@@ -162,9 +164,6 @@ class ServerLogger:
             
             # 控制台输出
             sys.stdout.write(f"{config.color}{log_line}\033[0m")
-            
-            if not self._running:  # 防止停止过程插入消息
-                return
             #插入到写入队列
             self._log_queue.put(log_line)
     
