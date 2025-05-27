@@ -201,7 +201,8 @@ class SlpServer:
                         logger.warning("识别为未知数据")
                         return
                 except BytesReaderError as e:
-                    logger.warning(f"收到了无效数据（{e}）")
+                    logger.warning(f"收到了无效数据[{e}]")
+                    return
                 except TypeError as e:
                     logger.warning(f"收到了无效数据[{e}]")
                     return
