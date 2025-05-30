@@ -156,13 +156,17 @@ class SlpServer:
                     if (head & 0x80) == 0x80:
                         for j in range(1,6):
                             if j >= 5:
-                                raise IOError("Insufficient data for varint")
+                                raise BytesReaderError("Insufficient data for varint")
                             byte_in = read_exactly(client_socket, 1, timeout=5)[0]
                             length |= (byte_in & 0x7F) << (j * 7)
                             if (byte_in & 0x80) != 0x80:
                                 break
     
                     logger.info(f"剩余数据长度：[{length}]")
+                    # 限制过长数据
+                    if length > 64:
+                        raise BytesReaderError("Data length is too large")
+                    
                     #正常数据，数据头解释为长度，继续接收
                     data = BytesReader(read_exactly(client_socket, length, timeout=5))
                     logger.info(f"收到数据：[{data.len()}]>[{format_hex(data.getdata())}]")
