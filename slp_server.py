@@ -26,8 +26,9 @@ class REQUEST(IntEnum):
 class SlpServer:
     def __init__(self,config):
         self.config = config
-        self.motd = self.create_motd(config)
         self.motd16 = self.create_motd16(config)
+        self.motd = self.create_motd(config)
+        self.kick_message = self.create_kick_message(config)
         self.is_loop = False
         logger.info("SLP服务器初始化完成")
     
@@ -65,7 +66,10 @@ class SlpServer:
                 motd["favicon"] = "data:image/png;base64," + base64.b64encode(image.read()).decode()
 
         return json.dumps(motd)
-
+    
+    @staticmethod
+    def create_kick_message(config):
+        return json.dumps({"text": config["kick_message"]})
 
     def start(self,wait=False,name=None,max_threads=10):
         if self.is_loop:
@@ -322,8 +326,8 @@ class SlpServer:
     def handle_login(self, client_socket,data,status):
         player_name = data.read_str()
         
-        #目前已知有3种情况，分别是：玩家名后什么也没有、玩家名后有profile_id为0且后无uuid、玩家名后有profile_id为1且后有uuid
-        try: #特殊处理：数据包可能不存在后面的UUID
+        #目前已知有3种情况，分别是：玩家名后什么也没有、玩家名后面直接就是uuid、玩家名后有profile_id：为0则后无uuid，为1则后有uuid
+        try:
             buuid = False
             profile_id = data.read_byte()
             buuid = True
@@ -342,7 +346,7 @@ class SlpServer:
                 
         logger.info(f"数据解析：player_name[{player_name}], profile_id[{profile_id}], uuid:[{uuid}]")
         logger.info("发送kick_message")#实际上是disconnect，但是为了更直观和保持配置文件不变，索性就叫踢出消息
-        write_str_response(client_socket, 0x00, json.dumps({"text": self.config["kick_message"]}))
+        write_str_response(client_socket, 0x00, self.kick_message)
     
     # https://minecraft.wiki/w/Java_Edition_protocol#Pong_Response_(status)
     @staticmethod
