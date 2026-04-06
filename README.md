@@ -1,4 +1,7 @@
 # MC_SLP
+[![GitHub Releases](https://shields.io/github/v/release/chenjunfu2/MC_SLP)](https://github.com/chenjunfu2/MC_SLP/releases)
+[![GitHub Releases downloads](https://shields.io/github/downloads/chenjunfu2/MC_SLP/total)](https://github.com/chenjunfu2/MC_SLP/releases)
+[![GitHub Repo stars](https://shields.io/github/stars/chenjunfu2/MC_SLP)](https://github.com/chenjunfu2/MC_SLP/)  
 用于在Minecraft服务器维护时，对Minecraft客户端提供SLP服务，
 通知玩家服务器正在维护的虚拟服务器，全称：Minecraft Server List Ping
 
